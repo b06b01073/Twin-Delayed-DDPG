@@ -2,10 +2,12 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn as nn
+import gym
 
 from model import Actor, Critic
 from noise_generator import GaussianNoise
 from replay_buffer import ReplayMemory  
+
 
 class TD3Agent:
     def __init__(self, obs_space, action_space, args, device):
@@ -44,16 +46,22 @@ class TD3Agent:
         self.device = device
 
         self.steps = 0 # for actor and target critic update
+        self.eval_freq = args.eval_freq
         self.gamma = args.gamma
         self.delay = args.delay
         self.tau = args.tau
+        self.seed = args.seed
+        self.env_name = args.env_name
+        self.eval_episodes = args.eval_episodes
 
 
-    def select_action(self, obs):
+    def select_action(self, obs, enable_noise=True):
         with torch.no_grad():
             obs = torch.from_numpy(obs).float().to(self.device)
             action = self.actor(obs).cpu().detach().numpy()
-            action = np.clip(action + self.action_noise.sample(), a_min=self.action_low, a_max=self.action_high)
+
+            if enable_noise:
+                action = np.clip(action + self.action_noise.sample(), a_min=self.action_low, a_max=self.action_high)
             return action
 
     
@@ -66,28 +74,50 @@ class TD3Agent:
         for target_param, source_param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(self.tau * source_param.data + (1.0 - self.tau) * target_param.data)
 
+    def evaluate(self):
+        env = gym.make(self.env_name)
 
-    def do_task(self, env, episodes):
-        for i in range(episodes):
+        avg_reward = 0.
+        for i in range(self.eval_episodes):
             obs = env.reset()
             total_reward = 0
-
             while True:
-                action = self.select_action(obs)
-                next_obs, reward, terminated, _ = env.step(action)
-
-                self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
-
-                self.learn()
-
-                obs = next_obs
-                if terminated:
-                    break
-
-                self.steps += 1
+                action = self.select_action(obs, enable_noise=False)
+                obs, reward, terminated, _ = env.step(action)
+                avg_reward += reward
                 total_reward += reward
 
-            print(f'Episode {i}, reward: {total_reward}')
+                if terminated:
+                    break
+            print(f'total reward of eval episode {i}: {total_reward}')
+
+        avg_reward /= self.eval_episodes
+
+        return avg_reward
+
+
+    def do_task(self, env, max_steps):
+        obs = env.reset(seed=self.seed)
+        for i in range(max_steps):
+
+            action = self.select_action(obs)
+            next_obs, reward, terminated, _ = env.step(action)
+
+            self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
+
+            self.learn()
+            self.steps += 1
+
+            obs = next_obs
+
+            if (i + 1) % self.eval_freq == 0:
+                print(f'evaluating...(steps: {i + 1})')
+                with torch.no_grad():
+                    avg_reward = self.evaluate()
+                    print(f'avg_reward: {avg_reward}')
+
+            if terminated:
+                obs = env.reset(seed=self.seed)
 
 
     def learn(self):
