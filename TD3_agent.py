@@ -3,6 +3,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import gym
+from tqdm import tqdm
 
 from model import Actor, Critic
 from noise_generator import GaussianNoise
@@ -10,7 +11,7 @@ from replay_buffer import ReplayMemory
 
 
 class TD3Agent:
-    def __init__(self, obs_space, action_space, args, device):
+    def __init__(self, obs_space, action_space, args, device, seed):
         self.obs_dim = obs_space.shape
         self.action_dim = action_space.shape
 
@@ -41,7 +42,8 @@ class TD3Agent:
         self.policy_smoother = GaussianNoise(size=self.action_dim, mu=args.smoother_mu, sigma=args.smoother_sigma, clip=args.smoother_clip)
 
 
-        self.memory = ReplayMemory(capacity=args.capacity)
+        self.memory = ReplayMemory(capacity=args.max_steps) # the entire history of the agent
+        self.buffer_capacity = args.max_steps
         self.batch_size = args.batch_size
         self.device = device
 
@@ -50,10 +52,13 @@ class TD3Agent:
         self.gamma = args.gamma
         self.delay = args.delay
         self.tau = args.tau
-        self.seed = args.seed
+        self.seed = seed
         self.env_name = args.env_name
         self.eval_episodes = args.eval_episodes
 
+        self.warmup = args.warmup
+        self.warmup_mu = args.warmup_mu
+        self.warmup_sigma = args.warmup_sigma
 
     def select_action(self, obs, enable_noise=True):
         with torch.no_grad():
@@ -69,10 +74,6 @@ class TD3Agent:
         for target_param, source_param in zip(target.parameters(), source.parameters()):
             target_param.data.copy_(source_param.data)
 
-
-    def soft_update(self, target, source):
-        for target_param, source_param in zip(target.parameters(), source.parameters()):
-            target_param.data.copy_(self.tau * source_param.data + (1.0 - self.tau) * target_param.data)
 
     def evaluate(self):
         env = gym.make(self.env_name)
@@ -95,9 +96,28 @@ class TD3Agent:
 
         return avg_reward
 
+    def do_warmup(self, env):
+        obs = env.reset(seed=self.seed)
+        random_action_generator = GaussianNoise(size=self.action_dim, mu=self.warmup_mu, sigma=self.warmup_sigma)
+        for _ in tqdm(range(self.buffer_capacity), desc='warming up...'):
+            action = np.clip(random_action_generator.sample(), a_max=self.action_high, a_min=self.action_low)
+            next_obs, reward, terminated, _ = env.step(action)
+
+            self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
+            obs = next_obs
+
+            if terminated:
+                obs = env.reset(seed=self.seed)
+
 
     def do_task(self, env, max_steps):
+        
+        if self.warmup:
+            self.do_warmup(env)
+
+
         obs = env.reset(seed=self.seed)
+        avg_rewards = [self.evaluate()] # evaluate the init model
         for i in range(max_steps):
 
             action = self.select_action(obs)
@@ -105,20 +125,23 @@ class TD3Agent:
 
             self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
 
-            self.learn()
-            self.steps += 1
-
-            obs = next_obs
 
             if (i + 1) % self.eval_freq == 0:
                 print(f'evaluating...(steps: {i + 1})')
+
                 with torch.no_grad():
                     avg_reward = self.evaluate()
+                    avg_rewards.append(avg_reward)
                     print(f'avg_reward: {avg_reward}')
+
+            self.steps += 1
+            obs = next_obs
+            self.learn()
 
             if terminated:
                 obs = env.reset(seed=self.seed)
 
+        return avg_rewards
 
     def learn(self):
         experience = self.memory.sample(self.batch_size, self.device)
@@ -156,14 +179,16 @@ class TD3Agent:
             grad.backward()
             self.actor_optim.step()
 
-            for param, target_param in zip(self.critic1.parameters(), self.target_critic1.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-            for param, target_param in zip(self.critic2.parameters(), self.target_critic2.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+            # soft update target network
+            for source_param, target_param in zip(self.critic1.parameters(), self.target_critic1.parameters()):
+                target_param.data.copy_(self.tau * source_param.data + (1 - self.tau) * target_param.data)
 
-            for param, target_param in zip(self.actor.parameters(), self.target_actor.parameters()):
-                target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
+            for source_param, target_param in zip(self.critic2.parameters(), self.target_critic2.parameters()):
+                target_param.data.copy_(self.tau * source_param.data + (1 - self.tau) * target_param.data)
+
+            for source_param, target_param in zip(self.actor.parameters(), self.target_actor.parameters()):
+                target_param.data.copy_(self.tau * source_param.data + (1 - self.tau) * target_param.data)
 
 
         
