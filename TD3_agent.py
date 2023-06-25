@@ -40,7 +40,7 @@ class TD3Agent:
 
         self.action_noise = GaussianNoise(size=self.action_dim, mu=args.exploration_mu, sigma=args.exploration_sigma)
         self.policy_smoother = GaussianNoise(size=self.action_dim, mu=args.smoother_mu, sigma=args.smoother_sigma, clip=args.smoother_clip)
-        self.random_action_generator = GaussianNoise(size=self.action_dim, mu=self.warmup_mu, sigma=self.warmup_sigma)
+        self.random_action_generator = GaussianNoise(size=self.action_dim, mu=args.warmup_mu, sigma=args.warmup_sigma)
 
 
         self.memory = ReplayMemory(capacity=args.max_steps) # the entire history of the agent
