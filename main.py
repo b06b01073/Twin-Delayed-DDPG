@@ -25,7 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--trials', type=int, default=10)
 
-    # warmup will fill the replay buffer by transitions with random actions (set the -w flat if you don't want this)
+    # warmup will fill the replay buffer by transitions with random actions before training(set the -w flat if you don't want this)
     parser.add_argument('--warmup', '-w', action='store_false')
     parser.add_argument('--warmup_mu', type=float, default=0)
     parser.add_argument('--warmup_sigma', type=float, default=0.5)
@@ -34,6 +34,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'using {device}')
 
     trials_avg_rewards = []
 

@@ -40,6 +40,7 @@ class TD3Agent:
 
         self.action_noise = GaussianNoise(size=self.action_dim, mu=args.exploration_mu, sigma=args.exploration_sigma)
         self.policy_smoother = GaussianNoise(size=self.action_dim, mu=args.smoother_mu, sigma=args.smoother_sigma, clip=args.smoother_clip)
+        self.random_action_generator = GaussianNoise(size=self.action_dim, mu=self.warmup_mu, sigma=self.warmup_sigma)
 
 
         self.memory = ReplayMemory(capacity=args.max_steps) # the entire history of the agent
@@ -98,9 +99,9 @@ class TD3Agent:
 
     def do_warmup(self, env):
         obs = env.reset(seed=self.seed)
-        random_action_generator = GaussianNoise(size=self.action_dim, mu=self.warmup_mu, sigma=self.warmup_sigma)
+        
         for _ in tqdm(range(self.buffer_capacity), desc='warming up...'):
-            action = np.clip(random_action_generator.sample(), a_max=self.action_high, a_min=self.action_low)
+            action = np.clip(self.random_action_generator.sample(), a_max=self.action_high, a_min=self.action_low)
             next_obs, reward, terminated, _ = env.step(action)
 
             self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
@@ -144,12 +145,16 @@ class TD3Agent:
         return avg_rewards
 
     def learn(self):
+
+        # sample experience from replay buffer
         experience = self.memory.sample(self.batch_size, self.device)
         if experience is None:
             return
         
         obs, action, reward, next_obs, terminated = experience
 
+
+        # build q target
         with torch.no_grad():
             next_action = self.target_actor(next_obs) 
             next_action += torch.from_numpy(self.policy_smoother.sample()).float().to(self.device)
@@ -174,6 +179,8 @@ class TD3Agent:
 
         # update actor and target network
         if self.steps % self.delay == 0:
+
+            # update actor
             grad = -self.critic1(obs, self.actor(obs)).mean() # negative sign for gradient ascend
             self.actor_optim.zero_grad()
             grad.backward()

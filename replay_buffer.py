@@ -19,5 +19,4 @@ class ReplayMemory:
             return None
 
         transitions = random.sample(self.buffer, batch_size)
-        return (torch.tensor(x, dtype=torch.float, device=device)
-                for x in zip(*transitions))
+        return (torch.tensor(x, dtype=torch.float, device=device) for x in zip(*transitions))

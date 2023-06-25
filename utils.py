@@ -18,4 +18,4 @@ def plot_result(trials_avg_rewards, max_steps, eval_freq, env_name):
     if not os.path.exists('./result'):
         os.mkdir('./result')
 
-    plt.savefig('./result/avg_return.jpg') 
+    plt.savefig(f'./result/{env_name}.jpg') 
