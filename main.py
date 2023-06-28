@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--warmup_mu', type=float, default=0)
     parser.add_argument('--warmup_sigma', type=float, default=0.5)
     
+    parser.add_argument('--save_dir', type=str, default='./model_params')
 
     args = parser.parse_args()
     

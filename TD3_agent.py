@@ -8,6 +8,7 @@ from tqdm import tqdm
 from model import Actor, Critic
 from noise_generator import GaussianNoise
 from replay_buffer import ReplayMemory  
+import os
 
 
 class TD3Agent:
@@ -60,6 +61,8 @@ class TD3Agent:
         self.warmup = args.warmup
         self.warmup_mu = args.warmup_mu
         self.warmup_sigma = args.warmup_sigma
+
+        self.save_dir = args.save_dir
 
     def select_action(self, obs, enable_noise=True):
         with torch.no_grad():
@@ -135,6 +138,9 @@ class TD3Agent:
                     avg_rewards.append(avg_reward)
                     print(f'avg_reward: {avg_reward}')
 
+
+                    self.save_model()
+
             self.steps += 1
             obs = next_obs
             self.learn()
@@ -197,5 +203,14 @@ class TD3Agent:
             for source_param, target_param in zip(self.actor.parameters(), self.target_actor.parameters()):
                 target_param.data.copy_(self.tau * source_param.data + (1 - self.tau) * target_param.data)
 
+
+        
+    def save_model(self):
+        if not os.path.exists(self.save_dir):
+            os.mkdir(self.save_dir)
+
+        torch.save(self.actor.state_dict(), f'{self.save_dir}/actor_{self.steps+1}.pth')
+        torch.save(self.critic1.state_dict(), f'{self.save_dir}/critic1_{self.steps+1}.pth')
+        torch.save(self.critic2.state_dict(), f'{self.save_dir}/critic2_{self.steps+1}.pth')
 
         
