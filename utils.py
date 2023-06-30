@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-def plot_result(trials_avg_rewards, max_steps, eval_freq, env_name):
+def plot_result(trials_avg_rewards, max_steps, eval_freq, env_name, save_path):
     trials_avg_rewards = np.array(trials_avg_rewards)
     std = np.std(trials_avg_rewards, axis=0)
     mean = np.mean(trials_avg_rewards, axis=0)
@@ -14,8 +14,4 @@ def plot_result(trials_avg_rewards, max_steps, eval_freq, env_name):
     plt.plot(x, mean, color='#2277aa')
     plt.fill_between(x, mean + std, mean - std, color = '#a8d1df', alpha=0.4)
 
-
-    if not os.path.exists('./result'):
-        os.mkdir('./result')
-
-    plt.savefig(f'./result/{env_name}.jpg') 
+    plt.savefig(os.path.join(save_path, 'plot.jpg')) 

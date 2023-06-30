@@ -41,7 +41,6 @@ class TD3Agent:
 
         self.action_noise = GaussianNoise(size=self.action_dim, mu=args.exploration_mu, sigma=args.exploration_sigma)
         self.policy_smoother = GaussianNoise(size=self.action_dim, mu=args.smoother_mu, sigma=args.smoother_sigma, clip=args.smoother_clip)
-        self.random_action_generator = GaussianNoise(size=self.action_dim, mu=args.warmup_mu, sigma=args.warmup_sigma)
 
 
         self.memory = ReplayMemory(capacity=args.max_steps) # the entire history of the agent
@@ -57,10 +56,10 @@ class TD3Agent:
         self.seed = seed
         self.env_name = args.env_name
         self.eval_episodes = args.eval_episodes
+        self.random_seed = args.random_seed
 
         self.warmup = args.warmup
-        self.warmup_mu = args.warmup_mu
-        self.warmup_sigma = args.warmup_sigma
+        self.warmup_step = args.warmup_step
 
         self.save_dir = args.save_dir
 
@@ -97,14 +96,14 @@ class TD3Agent:
             print(f'total reward of eval episode {i}: {total_reward}')
 
         avg_reward /= self.eval_episodes
-
+        print(f'average reward: {avg_reward}')
         return avg_reward
 
     def do_warmup(self, env):
         obs = env.reset(seed=self.seed)
         
-        for _ in tqdm(range(self.buffer_capacity), desc='warming up...'):
-            action = np.clip(self.random_action_generator.sample(), a_max=self.action_high, a_min=self.action_low)
+        for _ in tqdm(range(self.warmup_step), desc='warming up...'):
+            action = self.select_action(obs, enable_noise=True)
             next_obs, reward, terminated, _ = env.step(action)
 
             self.memory.append(obs, action, [reward], next_obs, [int(terminated)])
@@ -132,13 +131,9 @@ class TD3Agent:
 
             if (i + 1) % self.eval_freq == 0:
                 print(f'evaluating...(steps: {i + 1})')
-
                 with torch.no_grad():
                     avg_reward = self.evaluate()
                     avg_rewards.append(avg_reward)
-                    print(f'avg_reward: {avg_reward}')
-
-
                     self.save_model()
 
             self.steps += 1
@@ -206,11 +201,12 @@ class TD3Agent:
 
         
     def save_model(self):
-        if not os.path.exists(self.save_dir):
-            os.mkdir(self.save_dir)
+        model_path = os.path.join(self.save_dir, self.env_name)
+        if not os.path.exists(model_path):
+            os.mkdir(model_path)
 
-        torch.save(self.actor.state_dict(), f'{self.save_dir}/actor_{self.steps+1}.pth')
-        torch.save(self.critic1.state_dict(), f'{self.save_dir}/critic1_{self.steps+1}.pth')
-        torch.save(self.critic2.state_dict(), f'{self.save_dir}/critic2_{self.steps+1}.pth')
+        torch.save(self.actor.state_dict(), f'{model_path}/actor_{self.steps+1}.pth')
+        torch.save(self.critic1.state_dict(), f'{model_path}/critic1_{self.steps+1}.pth')
+        torch.save(self.critic2.state_dict(), f'{model_path}/critic2_{self.steps+1}.pth')
 
         
