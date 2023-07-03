@@ -46,7 +46,7 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'using {device}')
 
-    trials_avg_rewards = []
+    trials_avg_returns = []
 
 
     # train model and repeat for `trials` times
@@ -55,10 +55,10 @@ if __name__ == '__main__':
         seed = args.seed + trial
 
         agent = TD3Agent(env.observation_space, env.action_space, args, device, seed)
-        avg_rewards = agent.do_task(env, args.max_steps)
-        trials_avg_rewards.append(avg_rewards)
+        avg_returns = agent.do_task(env, args.max_steps)
+        trials_avg_returns.append(avg_returns)
 
         # save record as numpy binary (so that you can stop training and come back later)
-        np.save(os.path.join(save_path, f'{seed}_avg_reward'), avg_rewards)
+        np.save(os.path.join(save_path, f'{seed}_avg_reward'), avg_returns)
 
-    plot_result(trials_avg_rewards, args.max_steps, args.eval_freq, args.env_name, save_path)
+    plot_result(trials_avg_returns, args.max_steps, args.eval_freq, args.env_name, save_path)

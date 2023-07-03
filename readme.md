@@ -14,4 +14,5 @@ The result of 10 trails (default) will be stored in the result directory. The ag
 # Result
 The shaded area represents a standard deviation.
 
-![Result](result/HalfCheetah-v4.jpg)
+![HalfCheetah](result/HalfCheetah-v4/HalfCheetah-v4.jpg)
+![Ant](result/Ant-v4/Ant-v4.jpg)

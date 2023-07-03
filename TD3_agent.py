@@ -56,12 +56,13 @@ class TD3Agent:
         self.seed = seed
         self.env_name = args.env_name
         self.eval_episodes = args.eval_episodes
-        self.random_seed = args.random_seed
 
         self.warmup = args.warmup
         self.warmup_step = args.warmup_step
 
         self.save_dir = args.save_dir
+
+        self.best_eval_score = float('-inf')
 
     def select_action(self, obs, enable_noise=True):
         with torch.no_grad():
@@ -120,7 +121,7 @@ class TD3Agent:
 
 
         obs = env.reset(seed=self.seed)
-        avg_rewards = [self.evaluate()] # evaluate the init model
+        avg_returns = [self.evaluate()] # evaluate the init model
         for i in range(max_steps):
 
             action = self.select_action(obs)
@@ -132,9 +133,14 @@ class TD3Agent:
             if (i + 1) % self.eval_freq == 0:
                 print(f'evaluating...(steps: {i + 1})')
                 with torch.no_grad():
-                    avg_reward = self.evaluate()
-                    avg_rewards.append(avg_reward)
-                    self.save_model()
+                    avg_return = self.evaluate()
+                    avg_returns.append(avg_return)
+
+                    # save the best perfoming model
+                    if avg_return > self.best_eval_score:
+                        print(f'saving model (avg_return={avg_return}, prev_best={self.best_eval_score})')
+                        self.best_eval_score = avg_return
+                        self.save_model()
 
             self.steps += 1
             obs = next_obs
@@ -143,7 +149,7 @@ class TD3Agent:
             if terminated:
                 obs = env.reset(seed=self.seed)
 
-        return avg_rewards
+        return avg_returns
 
     def learn(self):
 
@@ -201,12 +207,12 @@ class TD3Agent:
 
         
     def save_model(self):
-        model_path = os.path.join(self.save_dir, self.env_name)
+        model_path = os.path.join(self.save_dir, self.env_name, f'seed{self.seed}')
         if not os.path.exists(model_path):
             os.mkdir(model_path)
 
-        torch.save(self.actor.state_dict(), f'{model_path}/actor_{self.steps+1}.pth')
-        torch.save(self.critic1.state_dict(), f'{model_path}/critic1_{self.steps+1}.pth')
-        torch.save(self.critic2.state_dict(), f'{model_path}/critic2_{self.steps+1}.pth')
+        torch.save(self.actor.state_dict(), f'{model_path}/actor.pth')
+        torch.save(self.critic1.state_dict(), f'{model_path}/critic1.pth')
+        torch.save(self.critic2.state_dict(), f'{model_path}/critic2.pth')
 
         

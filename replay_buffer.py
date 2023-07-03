@@ -4,7 +4,7 @@ import torch
 
 class ReplayMemory:
     def __init__(self, capacity):
-        self.buffer = deque(maxlen=capacity)
+        self.buffer = deque(maxlen=capacity) # tuple of tuples, the inner tupple represent a single transition
 
     def __len__(self):
         return len(self.buffer)
